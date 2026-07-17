@@ -4,11 +4,40 @@ import Collection from './components/Collection.jsx'
 import ObjectDetail from './components/ObjectDetail.jsx'
 import { objetos } from './data/objetos.js'
 import { magiclick } from './assets/objetos/magiclick.js'
+import { calculadora } from './assets/objetos/calculadora.js'
+import {
+  licuadora,
+  radio,
+  televisor,
+  cubiertos,
+  vajilla,
+  sillonBasico,
+  sillaPlaka,
+  sillaTrigamba,
+  linterna,
+  sillonCinta,
+  mobiliarioEscolar,
+  banquetaAlta,
+  lamparaOlympia,
+} from './assets/objetos/objetos-detalle.js'
 
-// Registro de datos de detalle por id. Por ahora sólo Magiclick está conectado;
-// los otros 14 se irán sumando con su propio módulo de datos.
+// Registro de datos de detalle por id. Se van sumando objetos con su módulo de datos.
 const DETALLES = {
   magiclick,
+  'calculadora-cifra': calculadora,
+  'licuadora-aurora': licuadora,
+  'radio-giulia': radio,
+  'televisor-micro': televisor,
+  'cubiertos-orfeo': cubiertos,
+  'vajilla-mesa': vajilla,
+  'sillon-basico': sillonBasico,
+  'silla-plaka': sillaPlaka,
+  'silla-trigamba': sillaTrigamba,
+  'linterna-pop': linterna,
+  'sillon-cinta': sillonCinta,
+  'mobiliario-escolar': mobiliarioEscolar,
+  'banqueta-alta': banquetaAlta,
+  'lampara-olympia': lamparaOlympia,
 }
 
 const MS_SLIDE = 700 // duración del slide-up Toolkit → Colección

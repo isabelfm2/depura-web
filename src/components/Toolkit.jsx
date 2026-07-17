@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { shapes } from '../assets/shapes.js'
 
 // 24 pares default → hover. En cada par cambian TANTO la forma como el color.
@@ -51,19 +51,22 @@ const TEXTO =
   'Una colección de objetos de diseño argentino diseñados en la segunda mitad del siglo XX, leída a través de la reducción progresiva de la forma hacia lo esencial.'
 
 // Tiempos de la secuencia
-const STAGGER = 28 // ms entre celdas al desvanecerse
-const DUR_CELDA = 320 // ms de cada celda
-const MS_SALIDA = (PAIRS.length - 1) * STAGGER + DUR_CELDA + 120 // total hasta pantalla en blanco
-const MS_POR_LETRA = 24 // velocidad del typewriter
+const MS_MIN = 15 // intervalo mínimo entre celdas tapadas (ms)
+const MS_MAX = 20 // intervalo máximo entre celdas tapadas (ms)
 
-function Cell({ defaultShape, hoverShape, saliendo, delay }) {
+// Orden aleatorio (Fisher–Yates) de los índices 0..n-1.
+function ordenAleatorio(n) {
+  const a = Array.from({ length: n }, (_, i) => i)
+  for (let i = n - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1))
+    ;[a[i], a[j]] = [a[j], a[i]]
+  }
+  return a
+}
+
+function Cell({ defaultShape, hoverShape, cubierta }) {
   return (
-    <div
-      className={`group relative flex items-center justify-center overflow-hidden ${
-        saliendo ? 'formas-out' : ''
-      }`}
-      style={saliendo ? { animationDelay: `${delay}ms` } : undefined}
-    >
+    <div className="group relative flex items-center justify-center overflow-hidden">
       {/* forma default */}
       <img
         src={shapes[defaultShape]}
@@ -78,43 +81,27 @@ function Cell({ defaultShape, hoverShape, saliendo, delay }) {
         aria-hidden="true"
         className="pointer-events-none absolute max-h-[55%] max-w-[55%] select-none object-contain opacity-0 group-hover:opacity-100"
       />
+      {/* Cuadrado bordó que tapa la celda entera (instantáneo, sin transición) */}
+      {cubierta && <span className="absolute inset-0 bg-depura-bordo" />}
     </div>
   )
 }
 
-// Texto del brief con efecto máquina de escribir + botón "Ver colección".
-// Aislado en su propio componente para que el re-render por cada letra NO
-// re-renderice (ni reinicie la transición de) las celdas de la grilla.
-function Brief({ texto, velocidad, onVerColeccion }) {
-  const [n, setN] = useState(0)
-
-  useEffect(() => {
-    let i = 0
-    const id = setInterval(() => {
-      i += 1
-      setN(i)
-      if (i >= texto.length) clearInterval(id)
-    }, velocidad)
-    return () => clearInterval(id)
-  }, [texto, velocidad])
-
-  const listo = n >= texto.length
-
+// Texto curatorial del brief + botón "Ver colección". Aparece todo de una,
+// con un fade-in rápido (sin efecto máquina de escribir).
+function Brief({ texto, onVerColeccion }) {
   return (
     <>
-      <p className="absolute top-1/2 left-[50px] w-[min(1100px,75vw)] -translate-y-1/2 text-[32px] leading-[1.45] font-extralight text-depura-bordo italic">
-        <span>{texto.slice(0, n)}</span>
-        {!listo && <span className="caret-blink font-normal not-italic">|</span>}
-        <span className="text-transparent">{texto.slice(n)}</span>
+      <p className="brief-in absolute top-1/2 left-[50px] w-[min(1200px,80vw)] -translate-y-1/2 text-[40px] leading-[1.45] font-extralight text-white italic">
+        {texto}
       </p>
 
-      {/* Botón alineado al eje vertical del logo (columna inferior derecha) */}
+      {/* Botón rectangular rojo con borde blanco. Alineado a la izquierda con el
+          texto (left 50px) y a la altura del logo DEPURA (centro vertical ~90%). */}
       <button
         type="button"
         onClick={onVerColeccion}
-        className={`absolute bottom-[17%] left-[90%] z-10 -translate-x-1/2 cursor-pointer rounded-full bg-depura-bordo px-8 py-3.5 text-base font-semibold whitespace-nowrap text-white shadow-[1px_1px_6px_rgba(0,0,0,0.3)] transition-opacity duration-500 ${
-          listo ? 'opacity-100' : 'pointer-events-none opacity-0'
-        }`}
+        className="brief-in absolute top-[90%] left-[50px] z-10 -translate-y-1/2 cursor-pointer border-2 border-white bg-depura-rojo px-8 py-3 text-[19px] font-bold whitespace-nowrap text-white uppercase"
       >
         Ver colección
       </button>
@@ -122,6 +109,7 @@ function Brief({ texto, velocidad, onVerColeccion }) {
   )
 }
 
+// La celda del logo NUNCA se cubre: el wordmark queda visible en todo momento.
 function LogoCell({ onClick, clickable }) {
   return (
     <button
@@ -151,55 +139,86 @@ function LogoCell({ onClick, clickable }) {
  */
 export default function Toolkit({ onVerColeccion }) {
   const [fase, setFase] = useState('grilla') // 'grilla' | 'saliendo' | 'brief'
+  const [cubiertas, setCubiertas] = useState(() => Array(PAIRS.length).fill(false))
+  const timeoutsRef = useRef([])
 
-  const saliendo = fase === 'saliendo' || fase === 'brief'
+  // Garantiza que al montar (recarga, hot-reload o restauración de bfcache)
+  // TODAS las formas arranquen visibles y en la fase inicial: nunca queda
+  // estado "desaparecido" guardado entre renders. Al desmontar, limpia timers.
+  useEffect(() => {
+    setFase('grilla')
+    setCubiertas(Array(PAIRS.length).fill(false))
+    return () => {
+      timeoutsRef.current.forEach(clearTimeout)
+      timeoutsRef.current = []
+    }
+  }, [])
 
+  // Al hacer click en DEPURA: cada celda con forma se tapa con un cuadrado bordó
+  // del tamaño exacto de la celda, en orden aleatorio y con 15-20ms entre cada
+  // una. La celda del logo queda afuera (el wordmark sigue visible), igual que
+  // la grilla punteada, que se pinta por encima. Al taparse la última arranca el
+  // brief (fase 'brief'), que usa el mismo bordó → sin corte visible.
   function comenzar() {
     setFase('saliendo')
-    setTimeout(() => setFase('brief'), MS_SALIDA)
+    const orden = ordenAleatorio(PAIRS.length)
+    let k = 0
+    const paso = () => {
+      const idx = orden[k] // capturar el índice AHORA (el updater corre async)
+      setCubiertas((prev) => {
+        const next = [...prev]
+        next[idx] = true
+        return next
+      })
+      k += 1
+      if (k < orden.length) {
+        timeoutsRef.current.push(setTimeout(paso, MS_MIN + Math.random() * (MS_MAX - MS_MIN)))
+      } else {
+        setFase('brief')
+      }
+    }
+    timeoutsRef.current.push(setTimeout(paso, MS_MIN + Math.random() * (MS_MAX - MS_MIN)))
   }
 
   return (
-    <div className="font-montserrat relative h-screen w-screen overflow-hidden bg-white">
-      {/* Grilla (las formas se desvanecen; el logo permanece) */}
+    <div
+      className={`font-montserrat relative h-screen w-screen overflow-hidden transition-colors duration-200 ${
+        fase === 'brief' ? 'bg-depura-bordo' : 'bg-white'
+      }`}
+    >
+      {/* Grilla — cada celda se va tapando con un cuadrado bordó en orden aleatorio */}
       <div className="grid h-full w-full grid-cols-5 grid-rows-5">
         {PAIRS.map(([def, hov], i) => (
-          <Cell
-            key={i}
-            defaultShape={def}
-            hoverShape={hov}
-            saliendo={saliendo}
-            delay={i * STAGGER}
-          />
+          <Cell key={i} defaultShape={def} hoverShape={hov} cubierta={cubiertas[i]} />
         ))}
         <LogoCell onClick={comenzar} clickable={fase === 'grilla'} />
       </div>
 
-      {/* Líneas punteadas de la grilla (se desvanecen junto con las formas) */}
-      <div
-        className="pointer-events-none absolute inset-0 transition-opacity duration-300"
-        style={{ opacity: saliendo ? 0 : 1 }}
-      >
-        {INNER.map((pos) => (
-          <div
-            key={`v-${pos}`}
-            className="absolute inset-y-0"
-            style={{ left: `${pos}%`, width: `${LINE_W}px`, transform: 'translateX(-50%)', backgroundImage: dashV }}
-          />
-        ))}
-        {INNER.map((pos) => (
-          <div
-            key={`h-${pos}`}
-            className="absolute inset-x-0"
-            style={{ top: `${pos}%`, height: `${LINE_W}px`, transform: 'translateY(-50%)', backgroundImage: dashH }}
-          />
-        ))}
-      </div>
-
-      {/* Mini brief: texto typewriter + botón (aislado para no re-renderizar la grilla) */}
-      {fase === 'brief' && (
-        <Brief texto={TEXTO} velocidad={MS_POR_LETRA} onVerColeccion={onVerColeccion} />
+      {/* Líneas punteadas de la grilla: visibles siempre (antes, durante y
+          durante la transición de celdas). Al venir después de la grilla en el
+          DOM y ser todas z-auto, se pintan por encima de los cuadrados bordó.
+          Se desmontan al entrar el brief: corte instantáneo, sin fade. */}
+      {fase !== 'brief' && (
+        <div className="pointer-events-none absolute inset-0">
+          {INNER.map((pos) => (
+            <div
+              key={`v-${pos}`}
+              className="absolute inset-y-0"
+              style={{ left: `${pos}%`, width: `${LINE_W}px`, transform: 'translateX(-50%)', backgroundImage: dashV }}
+            />
+          ))}
+          {INNER.map((pos) => (
+            <div
+              key={`h-${pos}`}
+              className="absolute inset-x-0"
+              style={{ top: `${pos}%`, height: `${LINE_W}px`, transform: 'translateY(-50%)', backgroundImage: dashH }}
+            />
+          ))}
+        </div>
       )}
+
+      {/* Mini brief: texto curatorial + botón */}
+      {fase === 'brief' && <Brief texto={TEXTO} onVerColeccion={onVerColeccion} />}
     </div>
   )
 }

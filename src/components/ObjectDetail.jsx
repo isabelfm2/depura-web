@@ -37,6 +37,78 @@ const FORMAS_PRIMITIVAS = {
       </svg>
     ),
   },
+  'rectangulo-vertical': {
+    label: 'Rectángulo',
+    svg: (
+      <svg viewBox="0 0 32 56" className="h-full w-full" aria-hidden="true">
+        <rect width="32" height="56" fill="currentColor" />
+      </svg>
+    ),
+  },
+  'rectangulo-horizontal': {
+    label: 'Rectángulo',
+    svg: (
+      <svg viewBox="0 0 56 30" className="h-full w-full" aria-hidden="true">
+        <rect width="56" height="30" fill="currentColor" />
+      </svg>
+    ),
+  },
+  cuadrado: {
+    label: 'Cuadrado',
+    svg: (
+      <svg viewBox="0 0 48 48" className="h-full w-full" aria-hidden="true">
+        <rect width="48" height="48" fill="currentColor" />
+      </svg>
+    ),
+  },
+  circulo: {
+    label: 'Círculo',
+    svg: (
+      <svg viewBox="0 0 48 48" className="h-full w-full" aria-hidden="true">
+        <circle cx="24" cy="24" r="24" fill="currentColor" />
+      </svg>
+    ),
+  },
+  'circulo-estirado': {
+    label: 'Círculo',
+    svg: (
+      <svg viewBox="0 0 56 24" className="h-full w-full" aria-hidden="true">
+        <ellipse cx="28" cy="12" rx="28" ry="12" fill="currentColor" />
+      </svg>
+    ),
+  },
+  'rectangulo-vertical-fino': {
+    label: 'Rectángulo',
+    svg: (
+      <svg viewBox="0 0 14 56" className="h-full w-full" aria-hidden="true">
+        <rect width="14" height="56" fill="currentColor" />
+      </svg>
+    ),
+  },
+  'rectangulo-vertical-ancho': {
+    label: 'Rectángulo',
+    svg: (
+      <svg viewBox="0 0 44 56" className="h-full w-full" aria-hidden="true">
+        <rect width="44" height="56" fill="currentColor" />
+      </svg>
+    ),
+  },
+  'rectangulo-horizontal-fino': {
+    label: 'Rectángulo',
+    svg: (
+      <svg viewBox="0 0 56 12" className="h-full w-full" aria-hidden="true">
+        <rect width="56" height="12" fill="currentColor" />
+      </svg>
+    ),
+  },
+  'rectangulo-horizontal-chico': {
+    label: 'Rectángulo',
+    svg: (
+      <svg viewBox="0 0 56 26" className="h-full w-full" aria-hidden="true">
+        <rect x="14" y="8" width="28" height="10" fill="currentColor" />
+      </svg>
+    ),
+  },
 }
 
 // QR de ejemplo (placeholder determinístico a partir de la config). No es un QR
@@ -110,14 +182,23 @@ export default function ObjectDetail({ nombre, niveles, colores, formas, onInici
   const [color, setColor] = useState(COLOR_DEFECTO)
   const [souvenirAbierto, setSouvenirAbierto] = useState(false)
 
-  // Reemplaza los sentinelas por variables CSS (una sola vez por set de niveles).
-  // var() no funciona en atributos de presentación, pero sí dentro de `style`.
+  // Normaliza cada nivel (una sola vez por set de niveles):
+  //  1. Los sentinelas de color → variables CSS. var() no funciona en atributos
+  //     de presentación, pero sí dentro de `style`.
+  //  2. El tag raíz <svg> → width/height 100% y preserveAspectRatio "meet",
+  //     descartando los width/height propios del archivo. Así cualquier nivel
+  //     (foto o vector, con el viewBox que sea) llena el contenedor fijo y su
+  //     contenido queda centrado y contenido: mismo espacio visual en todos.
   const nivelesProcesados = useMemo(
     () =>
       niveles.map((svg) =>
         svg
           .replace(/fill="#DB1B00"/gi, 'style="fill:var(--obj-main)"')
-          .replace(/fill="#64C6F7"/gi, 'style="fill:var(--obj-detail)"'),
+          .replace(/fill="#64C6F7"/gi, 'style="fill:var(--obj-detail)"')
+          .replace(/<svg\b([^>]*)>/i, (_, attrs) => {
+            const resto = attrs.replace(/\s(width|height|preserveAspectRatio)="[^"]*"/gi, '')
+            return `<svg${resto} width="100%" height="100%" preserveAspectRatio="xMidYMid meet">`
+          }),
       ),
     [niveles],
   )
@@ -127,9 +208,18 @@ export default function ObjectDetail({ nombre, niveles, colores, formas, onInici
 
   const nombreColor =
     colores.find((c) => c.hex.toLowerCase() === color.toLowerCase())?.nombre ?? color
-  const formasUsadas = formas
-    .map((f) => FORMAS_PRIMITIVAS[f]?.label)
-    .filter(Boolean)
+  // Resumen del souvenir: agrupa las formas repetidas con su cantidad, contando
+  // por etiqueta. Ej. ['rectangulo-vertical-ancho','rectangulo-fino','circulo']
+  // → ['2 Rectángulos', '1 Círculo'] (plural simple: todas terminan en vocal).
+  const formasUsadas = useMemo(() => {
+    const conteo = new Map()
+    for (const f of formas) {
+      const label = FORMAS_PRIMITIVAS[f]?.label
+      if (!label) continue
+      conteo.set(label, (conteo.get(label) ?? 0) + 1)
+    }
+    return [...conteo].map(([label, n]) => `${n} ${label}${n > 1 ? 's' : ''}`)
+  }, [formas])
 
   return (
     <div className="font-montserrat relative h-screen w-screen overflow-hidden bg-white text-depura-bordo">
@@ -141,14 +231,14 @@ export default function ObjectDetail({ nombre, niveles, colores, formas, onInici
 
       {/* Objeto — cambia de forma de manera INSTANTÁNEA (sin transición) al
           mover el slider de síntesis. Cuerpo = --obj-main, detalle = --obj-detail.
-          El nivel 1 (foto real) es más ancho que los niveles sintetizados, así que
-          se corre a la derecha para no quedar pegado al borde del círculo. */}
-      <div
-        className="pointer-events-none absolute top-1/2 -translate-x-1/2 -translate-y-1/2"
-        style={{ left: nivel === 1 ? '62%' : '54%' }}
-      >
+          Contenedor de tamaño FIJO y posición única (igual para todos los
+          niveles y objetos): adentro, cada nivel se centra y se contiene con
+          max 100%. Así al mover el slider el objeto siempre ocupa el mismo
+          espacio visual, sin saltos de posición ni de escala.
+          (size-[560px] es el único lugar donde se ajusta el tamaño.) */}
+      <div className="pointer-events-none absolute top-1/2 left-[58%] -translate-x-1/2 -translate-y-1/2">
         <div
-          className="flex h-[74vh] items-center justify-center [&>svg]:h-full [&>svg]:w-auto"
+          className="flex size-[560px] items-center justify-center [&>img]:max-h-full [&>img]:max-w-full [&>img]:object-contain [&>svg]:h-full [&>svg]:w-full"
           style={{ '--obj-main': color, '--obj-detail': colorDetalle(color) }}
           dangerouslySetInnerHTML={{ __html: svgActual }}
         />
@@ -156,16 +246,17 @@ export default function ObjectDetail({ nombre, niveles, colores, formas, onInici
 
       {/* Barra lateral de controles */}
       <aside className="absolute inset-y-0 left-0 flex w-[440px] flex-col py-12 pr-[40px] pl-[130px]">
-        {/* Inicio */}
+        {/* Inicio — sólo la flecha; el aria-label mantiene el nombre accesible */}
         <button
           type="button"
           onClick={onInicio}
-          className="cursor-pointer self-start rounded-full bg-depura-beige px-4 py-1 text-sm text-depura-bordo"
+          aria-label="Inicio"
+          className="cursor-pointer self-start border-2 border-depura-bordo bg-depura-rojo px-4 py-2 text-[13px] font-bold text-white uppercase"
         >
-          Inicio
+          &lt;
         </button>
 
-        <div className="mt-[14vh] flex flex-col gap-12">
+        <div className="absolute top-1/2 left-[130px] flex -translate-y-1/2 flex-col gap-12">
           {/* 1 · Sintetizar */}
           <section>
             <h2 className="mb-4 text-2xl">Sintetizar</h2>
@@ -239,7 +330,7 @@ export default function ObjectDetail({ nombre, niveles, colores, formas, onInici
         type="button"
         onClick={() => setSouvenirAbierto(true)}
         aria-hidden={!enNivelFinal}
-        className={`fixed right-12 bottom-10 z-20 cursor-pointer rounded-full bg-depura-bordo px-8 py-3.5 text-base font-semibold text-white shadow-[1px_1px_6px_rgba(0,0,0,0.3)] transition-opacity duration-500 ${
+        className={`fixed right-12 bottom-10 z-20 cursor-pointer border-2 border-white bg-depura-celeste px-8 py-3.5 text-base font-bold text-white uppercase transition-opacity duration-500 ${
           enNivelFinal ? 'opacity-100' : 'pointer-events-none opacity-0'
         }`}
       >
@@ -256,10 +347,12 @@ export default function ObjectDetail({ nombre, niveles, colores, formas, onInici
           aria-label="Generar souvenir"
         >
           <div
-            className="w-[420px] max-w-full rounded-2xl bg-white p-8 text-center shadow-2xl"
+            className="w-[620px] max-w-full bg-white p-12 text-center shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
-            <h2 className="text-2xl font-semibold text-depura-bordo">Generando tu souvenir…</h2>
+            <h2 className="text-2xl font-semibold text-depura-bordo">
+              Escaneá para retirar tu souvenir en la muestra.
+            </h2>
 
             <div className="mt-6 flex justify-center">
               <FakeQR value={`${nombre}|${nombreColor}|${formasUsadas.join(',')}`} />
@@ -282,7 +375,7 @@ export default function ObjectDetail({ nombre, niveles, colores, formas, onInici
               </div>
               <div className="flex gap-2">
                 <dt className="font-semibold">Formas usadas:</dt>
-                <dd>{formasUsadas.join(' + ')}</dd>
+                <dd>{formasUsadas.join(' · ')}</dd>
               </div>
             </dl>
 

@@ -4,7 +4,16 @@
       "PowerShell($paths = @\\(\"$env:ProgramFiles\\\\nodejs\\\\node.exe\",\"${env:ProgramFiles\\(x86\\)}\\\\nodejs\\\\node.exe\",\"$env:LOCALAPPDATA\\\\nodejs\\\\node.exe\",\"$env:APPDATA\\\\npm\\\\node.exe\",\"$env:LOCALAPPDATA\\\\Programs\\\\nodejs\\\\node.exe\"\\); foreach\\($p in $paths\\){ if\\(Test-Path $p\\){ Write-Output \"FOUND: $p\" } }; Get-Command nvm -ErrorAction SilentlyContinue; where.exe node 2>$null)",
       "PowerShell($env:Path = \"C:\\\\Program Files\\\\nodejs;\" + $env:Path; node --version; npm --version)",
       "mcp__Claude_Preview__preview_start",
-      "mcp__plugin_figma_figma__get_design_context"
+      "mcp__plugin_figma_figma__get_design_context",
+      "Bash(npm run *)",
+      "mcp__claude-in-chrome__navigate",
+      "mcp__claude-in-chrome__tabs_context_mcp",
+      "PowerShell(try { Get-NetTCPConnection -LocalPort 5173 -State Listen -ErrorAction Stop | Select-Object -ExpandProperty OwningProcess -Unique | ForEach-Object { Stop-Process -Id $_ -Force; \"killed PID $_\" } } catch { \"nada escuchando en 5173\" })",
+      "Bash(curl -s \"http://localhost:5173/depura-web/src/assets/objetos/objetos-detalle.js\" -o /tmp/mod.js -w \"HTTP %{http_code}\\\\n\")",
+      "Read(//tmp/**)",
+      "Bash(sed -n '/^const DETALLES/,/^}/p' src/App.jsx)",
+      "Bash(curl -s \"http://localhost:5173/depura-web/src/App.jsx\" -o /tmp/app.js -w \"App.jsx HTTP %{http_code}\\\\n\")",
+      "Bash(node -e ' *)"
     ]
   }
 }

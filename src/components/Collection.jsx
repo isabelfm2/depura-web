@@ -83,7 +83,7 @@ export default function Collection({ objetos, onSelect, onInicio }) {
           <button
             type="button"
             onClick={onInicio}
-            className="cursor-pointer rounded-full bg-depura-beige px-4 py-1 text-sm text-depura-bordo"
+            className="cursor-pointer border-2 border-depura-bordo bg-depura-rojo px-4 py-2 text-[13px] font-bold text-white uppercase"
           >
             ← Inicio
           </button>
